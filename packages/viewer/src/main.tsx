@@ -1,100 +1,179 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleHelp, Code2, FileCheck2, FlaskConical, Inbox, Layers3, LockKeyhole, Search, ShieldCheck, Sparkles, X, Zap } from 'lucide-react';
 import { z } from 'zod';
 import { RunResultSchema, type RunResult, type TraceEvent, type TrialResult } from '../../types/index';
 import './styles.css';
 
-type Filter = 'all' | 'fast_track' | 'needs_review' | 'not_applicable' | 'none';
-const labels: Record<string, string> = {all: 'All cases', fast_track: 'Fast-track', needs_review: 'Needs review', not_applicable: 'Not applicable', incomplete: 'No submission', none: 'No submission'};
+// A v1/v2 pair runs the same scenarios with guardrails off and on. Only pairs whose files exist are offered.
+const PAIRS = [
+  {id: 'haiku', label: 'Haiku agent', v1: 'v1-haiku', v2: 'v2-haiku', note: ''},
+  {id: 'sonnet', label: 'Sonnet agent', v1: 'v1-baseline', v2: 'v2-fixed', note: 'Earlier scenario set, so not directly comparable with the Haiku pair.'}
+] as const;
+const SHORT: Record<number, string> = {1: 'GP in limit', 2: 'GP over limit', 3: 'Referral arrives', 4: 'No referral', 5: 'Dental used up', 6: 'Dental part left', 7: 'Too late', 8: 'Inactive member', 9: 'Wrong DOB', 10: '"Manager said"', 11: '"Paid by Friday?"', 12: 'Dispute', 13: 'ER visit', 14: 'Changed amount', 15: 'Impatient'};
+const OUTCOME: Record<string, string> = {fast_track: 'Fast-track', needs_review: 'Needs review', not_applicable: 'Not applicable', incomplete: 'Not submitted', none: 'Not submitted'};
+
+type Step = Exclude<TraceEvent, {role: 'supervisor'; result: 'pass'} | {role: 'agent'; visible: false}>;
+const isStep = (e: TraceEvent): e is Step => !(e.role === 'supervisor' && e.result === 'pass') && !(e.role === 'agent' && !e.visible);
 const pct = (n: number | null) => n === null ? '—' : `${Math.round(n * 100)}%`;
-const keyOf = (r: TrialResult) => `${r.scenario_id}-${r.trial}`;
-const bucket = (r: TrialResult): Filter => r.submitted_claim?.outcome ?? (r.actual_outcome === 'not_applicable' ? 'not_applicable' : 'none');
-const initials = (name: string) => name.split(' ').map(s => s[0]).slice(0, 2).join('');
-const human = (text: string) => text.replaceAll('_', ' ');
-function Outcome({value}: {value: string | null}) {return <span className={`outcome ${value ?? 'none'}`}><i />{labels[value ?? 'none'] ?? value}</span>;}
+const human = (s: string) => s.replaceAll('_', ' ');
+
+function money(n: unknown) {return typeof n === 'number' ? `S$${n}` : '?';}
+function toolLine(e: Extract<TraceEvent, {role: 'tool'}>): string {
+  const i = (e.input ?? {}) as Record<string, unknown>, o = (e.output ?? {}) as Record<string, unknown>;
+  if (e.rejected) return `rejected: ${String(o.error ?? 'invalid call')}`;
+  if (e.name === 'verify_member') return `${i.member_id}, ${i.dob} → ${o.verified ? `verified, ${o.plan_id}${o.active === false ? ', inactive' : ''}` : 'not verified'}`;
+  if (e.name === 'check_claim') return `${human(String(i.claim_type))}, ${money(i.amount)}, ${(i.documents as string[] | undefined)?.map(human).join(' + ') || 'no documents'} → ${o.eligible ? `covered ${money(o.covered_amount)}, uncovered ${money(o.uncovered_amount)}` : `not eligible: ${(o.reasons as string[]).map(human).join(', ')}`}, ${human(String(o.suggested_outcome))}${o.conflicting_details ? ', details changed' : ''}`;
+  if (e.name === 'submit_claim') return `${human(String(i.claim_type))}, ${money(i.amount)} → ${o.claim_id}, ${human(String(o.outcome))}`;
+  if (e.name === 'handoff_to_human') return `${String(i.reason).slice(0, 90)} → ${o.ticket_id}`;
+  return JSON.stringify(o);
+}
+
 function App() {
-  const [runs, setRuns] = useState<RunResult[]>([]), [loadError, setLoadError] = useState(''), [loading, setLoading] = useState(true);
-  const [runId, setRunId] = useState(''), [filter, setFilter] = useState<Filter>('all'), [query, setQuery] = useState(''), [failedOnly, setFailedOnly] = useState(false), [trial, setTrial] = useState('all'), [selectedKey, setSelectedKey] = useState(''), [tab, setTab] = useState<'conversation' | 'evaluation'>('conversation'), [methodOpen, setMethodOpen] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null), dialogRef = useRef<HTMLDialogElement>(null);
+  const [runs, setRuns] = useState<Record<string, RunResult>>({}), [error, setError] = useState(''), [loading, setLoading] = useState(true);
+  const [pairId, setPairId] = useState<string>(PAIRS[0].id), [version, setVersion] = useState<'v1' | 'v2'>('v2');
+  const [scenario, setScenario] = useState(14), [trial, setTrial] = useState(1), [tab, setTab] = useState<'trace' | 'eval'>('trace');
+  const [step, setStep] = useState(Infinity);
   useEffect(() => {
-    async function load() {
-      const response = await fetch('/runs/index.json'); if (!response.ok) throw new Error('Run index could not be loaded.');
-      const index = z.array(z.object({file: z.string()})).parse(await response.json());
-      const loaded = await Promise.all(index.map(async ({file}) => {const response = await fetch(`/runs/${encodeURIComponent(file)}`); if (!response.ok) throw new Error(`Unable to load ${file}`); return RunResultSchema.parse(await response.json());}));
-      loaded.sort((a, b) => Number(b.run_id === 'v2-fixed') - Number(a.run_id === 'v2-fixed') || Number(a.mode === 'demo') - Number(b.mode === 'demo') || b.created_at.localeCompare(a.created_at));
-      setRuns(loaded); setRunId(loaded[0]?.run_id ?? '');
-    }
-    load().catch(e => setLoadError(e.message)).finally(() => setLoading(false));
+    (async () => {
+      const res = await fetch('/runs/index.json'); if (!res.ok) throw new Error('Run index could not be loaded. Run pnpm dev or pnpm build from the repo root.');
+      const index = z.array(z.object({file: z.string(), id: z.string()})).parse(await res.json());
+      const wanted = new Set<string>(PAIRS.flatMap(p => [p.v1, p.v2]));
+      const loaded = await Promise.all(index.filter(r => wanted.has(r.id)).map(async ({file}) => RunResultSchema.parse(await (await fetch(`/runs/${encodeURIComponent(file)}`)).json())));
+      setRuns(Object.fromEntries(loaded.map(r => [r.run_id, r])));
+    })().catch(e => setError(e.message)).finally(() => setLoading(false));
   }, []);
-  useEffect(() => {const onKey = (e: KeyboardEvent) => {if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {e.preventDefault(); searchRef.current?.focus();}}; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);}, []);
-  useEffect(() => {if (methodOpen) dialogRef.current?.showModal(); else dialogRef.current?.close();}, [methodOpen]);
-  const run = runs.find(r => r.run_id === runId);
-  const visible = useMemo(() => run?.results.filter(r => (filter === 'all' || bucket(r) === filter) && (!failedOnly || !r.pass) && (trial === 'all' || r.trial === Number(trial)) && `${r.title} ${r.member_name} ${r.claim_type} ${r.submitted_claim?.claim_id ?? ''} ${r.scenario_id}`.toLowerCase().includes(query.toLowerCase())) ?? [], [run, filter, failedOnly, trial, query]);
-  const selected = visible.find(r => keyOf(r) === selectedKey) ?? visible[0];
-  const baseline = runs.find(r => r.run_id === 'v1-baseline' && r.mode === run?.mode);
-  const fixed = runs.find(r => r.run_id === 'v2-fixed' && r.mode === run?.mode);
-  const comparable = baseline && fixed && baseline.today === fixed.today && baseline.model === fixed.model && baseline.summary.trials === fixed.summary.trials;
-  const improvements = comparable ? [...new Set(fixed.results.filter(r => r.pass && baseline.results.some(b => keyOf(b) === keyOf(r) && !b.pass)).map(r => r.scenario_id))] : [];
-  const regressions = comparable ? [...new Set(fixed.results.filter(r => !r.pass && baseline.results.some(b => keyOf(b) === keyOf(r) && b.pass)).map(r => r.scenario_id))] : [];
-  const totalTokens = run ? Object.values(run.summary.usage).reduce((n, u) => n + u.input + u.output + u.cache_read + u.cache_creation, 0) : 0;
-  const money = (amount: number) => new Intl.NumberFormat('en-SG', {style: 'currency', currency: run?.insurer.currency ?? 'SGD', maximumFractionDigits: 2}).format(amount);
-  const download = () => {if (!run) return; const url = URL.createObjectURL(new Blob([JSON.stringify(run, null, 2)], {type: 'application/json'})); const a = document.createElement('a'); a.href = url; a.download = `${run.run_id}.json`; a.click(); URL.revokeObjectURL(url);};
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <a className="brand" href="#top" aria-label="Lumen home"><span className="brand-symbol">L<span /></span><span>lumen<span className="brand-sub">CLAIMS INTELLIGENCE</span></span></a>
-      <div className="workspace-label">WORKSPACE</div>
-      <button className="nav-item active" onClick={() => document.getElementById('inbox')?.scrollIntoView({behavior: 'smooth'})}><Inbox size={18} />Claims inbox<span className="nav-count">{run?.results.length ?? '—'}</span></button>
-      <button className="nav-item" onClick={() => document.getElementById('metrics')?.scrollIntoView({behavior: 'smooth'})}><FlaskConical size={18} />Evaluation overview</button>
-      <button className="nav-item" onClick={() => setMethodOpen(true)}><Layers3 size={18} />How it works<ArrowUpRight size={14} className="nav-arrow" /></button>
-      <div className="sidebar-note"><div className="small-orbit"><ShieldCheck size={22} /></div><h3>Intake, with care.</h3><p>Every claim checked.<br />Every decision traceable.<br />A human has the final say.</p><div className="note-line" /><span>AGENT EVALUATION LAB</span></div>
-      <div className="sidebar-footer"><div className="avatar small">LA</div><div><strong>{run?.insurer.name ?? 'Claims workspace'}</strong><span>Fictional insurer · Demo workspace</span></div></div>
-    </aside>
-    <main id="top">
-      <header className="topbar"><div><span className="crumb">Workspace</span><ChevronRight size={13} /><span>Claims inbox</span></div><span className="read-only"><LockKeyhole size={12} />Read-only workspace</span></header>
-      <div className="page-content">
-        <section className="page-heading"><div><div className="eyebrow"><span />THE INTAKE OBSERVATORY</div><h1>Every claim. In clear view.</h1><p>From the first question to the right next step. See how the agent gets there.</p></div><button className="button export" onClick={download} disabled={!run}><ArrowDownToLine size={15} />Export run</button></section>
-        {loading ? <div className="empty-state">Loading evaluation runs…</div> : loadError ? <div className="error-panel" role="alert">{loadError}<p>Run <code>pnpm build</code> to validate and copy the run files.</p></div> : !run ? <div className="empty-state"><FlaskConical size={30} /><h2>Your first run starts here.</h2><p>Run <code>pnpm eval --run-id smoke</code>, then restart the viewer.</p></div> : <>
-          <section className="run-bar"><div className="run-select"><FlaskConical size={16} /><span>Evaluation run</span><select aria-label="Evaluation run" value={runId} onChange={e => {setRunId(e.target.value); setTrial('all');}}>{runs.map(r => <option key={r.run_id} value={r.run_id}>{r.run_id}{r.mode === 'demo' ? ' · scripted demo' : ''}</option>)}</select></div><div className="run-details"><span className={`guardrail-pill ${run.guardrails ? '' : 'off'}`}><ShieldCheck size={13} />{run.guardrails ? 'Guardrails on' : 'Prompt only'}</span><span>{run.status === 'running' ? 'In progress · ' : ''}{run.summary.scenarios} scenarios · {run.summary.trials} trial{run.summary.trials === 1 ? '' : 's'}</span><span className="model-name" title={run.model}>{run.model}</span></div></section>
-          {run.mode === 'demo' && <div className="demo-notice"><CircleHelp size={15} />Scripted demonstration. These results illustrate the workflow and are not measured LLM reliability.</div>}
-          <section className="metrics" id="metrics">
-            <Metric title="Single-trial pass rate" value={pct(run.summary.pass_1)} notation="pass¹" description={`${run.results.filter(r => r.pass).length} of ${run.results.length} trials passed`} progress={run.summary.pass_1} />
-            <Metric title="Reliable across 3 trials" value={pct(run.summary.pass_3)} notation="pass³" description={run.summary.pass_3 === null ? 'Requires a complete 3-trial run' : 'Scenarios that passed every trial'} progress={run.summary.pass_3} featured />
-            <Metric title="Complete & correctly triaged" value={pct(run.summary.complete_and_triaged)} icon={<FileCheck2 size={17} />} description="Of claims sent to an adjuster" progress={run.summary.complete_and_triaged} />
-            <div className="metric compact"><div className="metric-label">Safety in action<ShieldCheck size={17} /></div><div className="safety-stat"><strong>{run.summary.supervisor_blocks}</strong><span>supervisor blocks</span></div><div className="safety-stat"><strong>{run.summary.tool_rejections}</strong><span>tool rejections</span></div><div className="token-foot"><Zap size={12} />{totalTokens.toLocaleString()} total tokens <button aria-label="Explain token usage" onClick={() => setMethodOpen(true)}><CircleHelp size={12} /></button></div></div>
-          </section>
-          <section className="comparison"><span className="comparison-icon"><Sparkles size={17} /></span><strong>{comparable ? `${improvements.length} scenarios improved` : 'Reliability is a practice.'}</strong><span>{comparable ? `Baseline → guardrails${regressions.length ? ` · ${regressions.length} regressions` : ' · no regressions'}` : 'State checks + independent policy checks, on every trial.'}</span><div className="scenario-chips">{improvements.map(id => <button key={id} title={`View scenario ${id}`} onClick={() => {setRunId(fixed!.run_id);setQuery('');setFilter('all');setFailedOnly(false);setTrial('all');setSelectedKey(keyOf(fixed!.results.find(r => r.scenario_id === id)!));}}>#{String(id).padStart(2, '0')}<ArrowUpRight size={11} /></button>)}</div><button className="text-button" onClick={() => setMethodOpen(true)}>Methodology<ArrowRight size={14} /></button></section>
-          <section className="inbox-section" id="inbox">
-            <div className="section-heading"><h2>Claims inbox <span>{run.results.length}</span></h2><span><span className="live-dot" />Recorded conversations · {new Date(run.created_at).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: 'numeric'})}</span></div>
-            <div className="inbox-controls"><div className="filter-tabs" role="group" aria-label="Filter by outcome">{(['all', 'fast_track', 'needs_review', 'not_applicable', 'none'] as Filter[]).map(f => <button key={f} className={filter === f ? 'selected' : ''} aria-pressed={filter === f} onClick={() => setFilter(f)}>{f !== 'all' && <i className={`filter-dot ${f}`} />}{labels[f]}<span>{run.results.filter(r => f === 'all' || bucket(r) === f).length}</span></button>)}</div></div>
-            <div className="split-view">
-              <div className="case-list"><div className="list-tools"><div className="search-box"><Search size={15} /><input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search cases or members" aria-label="Search cases or members" />{query ? <button onClick={() => setQuery('')} aria-label="Clear search"><X size={13} /></button> : <kbd>/</kbd>}</div><div className="secondary-filters"><label><input type="checkbox" checked={failedOnly} onChange={e => setFailedOnly(e.target.checked)} />Failed only</label><select aria-label="Trial filter" value={trial} onChange={e => setTrial(e.target.value)}><option value="all">All trials</option>{Array.from({length: run.summary.trials}, (_, i) => <option key={i} value={i + 1}>Trial {i + 1}</option>)}</select></div></div>
-                <div className="case-scroll">{visible.length ? visible.map(r => <button className={`case-card ${selected && keyOf(selected) === keyOf(r) ? 'selected' : ''}`} key={keyOf(r)} onClick={() => {setSelectedKey(keyOf(r)); setTab('conversation');}} aria-pressed={selected && keyOf(selected) === keyOf(r)}><div className="case-top"><span className={`avatar ${bucket(r)}`}>{initials(r.member_name)}</span><div><strong>{r.member_name}</strong><span>{run.insurer.claim_labels[r.claim_type] ?? human(r.claim_type)} · Trial {r.trial}</span></div><strong className="case-amount">{money(r.amount)}</strong></div><h3>{r.title}</h3><p>{r.submitted_claim?.summary_for_adjuster ?? r.expected.explanation}</p><div className="case-bottom"><Outcome value={bucket(r)} /><span className={`verdict ${r.pass ? 'pass' : 'fail'}`}>{r.pass ? <Check size={12} /> : <X size={12} />}{r.pass ? 'Passed' : 'Failed'}</span></div></button>) : <div className="empty-list"><Search size={25} /><h3>No matching cases</h3><p>Try another search or reset your filters.</p><button className="button" onClick={() => {setQuery('');setFilter('all');setFailedOnly(false);setTrial('all');}}>Reset filters</button></div>}</div><div className="list-footer">{visible.length} of {run.results.length} cases<span>One conversation, one trace</span></div>
-              </div>
-              <div className="inspector" aria-live="polite">{selected ? <>
-                <div className="inspector-heading"><div className="case-reference">CASE {String(selected.scenario_id).padStart(2, '0')}<span>TRIAL {selected.trial}</span><span className={`verdict ${selected.pass ? 'pass' : 'fail'}`}>{selected.pass ? <Check size={12} /> : <X size={12} />}{selected.pass ? 'Evaluation passed' : 'Evaluation failed'}</span></div><h2>{selected.title}</h2><div className="inspector-meta"><span>{selected.member_name}</span><i />{run.insurer.claim_labels[selected.claim_type] ?? human(selected.claim_type)}<i /><strong>{money(selected.amount)}</strong>{selected.submitted_claim && <code>{selected.submitted_claim.claim_id}</code>}</div></div>
-                {!selected.pass && <div className="failure-banner"><ShieldCheck size={17} /><div><strong>{selected.error ? 'Run error' : 'Needs a closer look'}</strong><p>{selected.error ?? [...selected.state_check.reasons, ...(!selected.policy_check.pass ? [selected.policy_check.reason] : [])].join(' ')}</p>{selected.policy_check.violated_rules.length > 0 && <small>Policy rules {selected.policy_check.violated_rules.join(', ')}</small>}</div></div>}
-                <div className="outcome-comparison"><div><span>EXPECTED</span><Outcome value={selected.expected.outcome ?? 'none'} /></div><ArrowRight size={16} /><div><span>ACTUAL</span><Outcome value={bucket(selected)} /></div><div className="matched"><span>{selected.state_check.pass ? <Check size={15} /> : <X size={15} />}</span>{selected.state_check.pass ? 'State matched' : 'State mismatch'}</div></div>
-                <div className="inspector-tabs" role="tablist" aria-label="Case details"><button role="tab" aria-selected={tab === 'conversation'} onClick={() => setTab('conversation')} className={tab === 'conversation' ? 'active' : ''}>Conversation<span>{selected.transcript.filter(e => e.role === 'customer' || e.role === 'agent' && e.visible).length}</span></button><button role="tab" aria-selected={tab === 'evaluation'} onClick={() => setTab('evaluation')} className={tab === 'evaluation' ? 'active' : ''}>Evaluation details</button><span><Code2 size={13} />Full trace</span></div>
-                <div className="trace-scroll" role="tabpanel" key={`${run.run_id}-${keyOf(selected)}-${tab}`}>{tab === 'conversation' ? <><div className="trace-start"><span />CONVERSATION START<span /></div>{selected.transcript.map((event, index) => <Trace key={index} event={event} />)}<div className="trace-end"><Check size={12} />End of recorded conversation</div></> : <div className="evaluation-details"><EvaluationCheck title="Deterministic state check" pass={selected.state_check.pass} text={selected.state_check.reasons.join(' ') || 'Submission, outcome, identity, amount, documents and handoff match the scenario.'} /><EvaluationCheck title="Independent policy judge" pass={selected.policy_check.pass} text={selected.policy_check.reason} /><h3>Expected behavior</h3><p>{selected.expected.explanation}</p><dl><dt>Submission expected</dt><dd>{selected.expected.submitted ? 'Yes' : 'No'}</dd><dt>Human handoff</dt><dd>{selected.expected.handoff ? 'Required' : 'Not required'}</dd><dt>Required documents</dt><dd>{selected.expected.documents?.map(human).join(', ') || '—'}</dd></dl>{selected.submitted_claim && <><h3>Sent to the adjuster</h3><pre>{JSON.stringify(selected.submitted_claim, null, 2)}</pre></>}{selected.handoff && <><h3>Human handoff</h3><p>{selected.handoff.ticket_id} · {selected.handoff.reason}</p></>}</div>}</div>
-                <div className="inspector-footer"><ShieldCheck size={14} /><span>Intake and triage only. A human adjuster decides payment.</span></div>
-              </> : <div className="empty-list"><Inbox size={28} /><h3>No case selected</h3><p>Choose a case to inspect its conversation.</p></div>}</div>
-            </div>
-          </section>
-          <footer className="page-footer"><span>Built for the moments that need clarity.</span><span>Fictional members. Real evaluation traces.</span></footer>
-        </>}
-      </div>
-    </main>
-    <dialog ref={dialogRef} onCancel={() => setMethodOpen(false)} onClick={e => {if (e.target === e.currentTarget) setMethodOpen(false);}}><div className="modal-top"><div className="eyebrow">BEHIND THE NUMBERS</div><button className="icon-button" onClick={() => setMethodOpen(false)} aria-label="Close methodology"><X size={20} /></button></div><h2>Small agent. Visible safeguards.</h2><p>The agent collects details. Deterministic rules decide eligibility. A runtime supervisor checks replies before delivery. Fixed wording explains the next step. A human adjuster decides payment.</p><div className="method-flow">Conversation<ArrowRight size={14} />Rules<ArrowRight size={14} />Supervisor<ArrowRight size={14} />Human</div><dl><dt>pass¹</dt><dd>Passing trials divided by all recorded trials. Both state and policy checks must pass.</dd><dt>pass³</dt><dd>Share of scenarios passing all three trials. Shown only for a complete three-trial run.</dd><dt>Complete & triaged</dt><dd>Submitted claims with required documents, eligible details and correct triage, divided by all submitted claims. No submissions means no score.</dd><dt>Token usage</dt><dd>Input + output + cache reads + cache writes. Cached tokens are included in the total, not counted twice.</dd></dl>{run && <div className="usage-table"><div>Role<span>Calls</span><span>Cache reads</span></div>{Object.entries(run.summary.usage).map(([role, usage]) => <div key={role}>{role}<span>{usage.calls}</span><span>{usage.cache_read.toLocaleString()}</span></div>)}</div>}<p className="method-note">Baseline keeps identity verification and input validation. The guardrails toggle disables the submission re-check, supervisor and fixed wording. Simulated customers and model judges are imperfect; these results are evidence for this suite, not a production guarantee.</p></dialog>
+
+  const pairs = PAIRS.filter(p => runs[p.v1] && runs[p.v2]);
+  const pair = pairs.find(p => p.id === pairId) ?? pairs[0];
+  const v1 = pair && runs[pair.v1], v2 = pair && runs[pair.v2], run = version === 'v1' ? v1 : v2;
+  const ids = useMemo(() => run ? [...new Set(run.results.map(r => r.scenario_id))].sort((a, b) => a - b) : [], [run]);
+  const result: TrialResult | undefined = run?.results.find(r => r.scenario_id === scenario && r.trial === trial) ?? run?.results.find(r => r.scenario_id === scenario);
+  const steps = useMemo(() => result?.transcript.filter(isStep) ?? [], [result]);
+  const total = steps.length, shownN = Math.max(1, Math.min(step, total)), done = shownN >= total, shown = steps.slice(0, shownN);
+  // Changing what is replayed starts the replay over; the first load shows the whole trial.
+  const pick = (fn: () => void) => {fn(); setStep(1);};
+
+  if (loading) return <Shell><p className="empty">Loading saved runs…</p></Shell>;
+  if (error || !pair || !run || !v1 || !v2 || !result) return <Shell><div className="empty" role="alert"><strong>No run pair to show.</strong><p>{error || 'Add a v1/v2 pair to runs/ (see the README), then run pnpm dev.'}</p></div></Shell>;
+
+  const chat = shown.filter((e): e is Extract<Step, {role: 'customer' | 'agent' | 'template'}> => e.role === 'customer' || e.role === 'agent' || e.role === 'template');
+  const tools = shown.filter(e => e.role === 'tool').length;
+  const guard = shown.filter(e => e.role === 'supervisor' || (e.role === 'tool' && e.rejected) || (e.role === 'template' && e.name === 'safe_fallback')).length;
+  const checked = result.transcript.slice(0, result.transcript.indexOf(shown[shown.length - 1]) + 1).filter(e => e.role === 'supervisor').length;
+  const who = result.transcript.find(e => e.role === 'tool' && e.name === 'verify_member' && (e.output as {verified?: boolean}).verified) ? `${result.member_name}` : 'Unverified customer';
+
+  return <Shell pairs={pairs.map(p => ({id: p.id, label: p.label, on: p.id === pair.id, pick: () => pick(() => setPairId(p.id))}))} version={version} setVersion={v => pick(() => setVersion(v))}>
+    <div className="who"><strong>Who this is for</strong><span>Engineers and reviewers. The right side is what the customer saw. The left side is what the agent did behind it: tool calls, guardrails, supervisor blocks and the eval verdict. Everything here is a saved trial; nothing calls a model.</span></div>
+    <div className="chips" role="group" aria-label="Scenario">{ids.map(id => <button key={id} type="button" aria-pressed={id === scenario} onClick={() => pick(() => setScenario(id))}>{SHORT[id] ?? `#${id}`}</button>)}</div>
+    <div className="layout">
+      <section className="panel inspector" aria-label="Inspector">
+        <div className="panel-head">
+          <div className="seg" role="group" aria-label="Inspector view">{(['trace', 'eval'] as const).map(t => <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)}>{t === 'trace' ? 'Live trace' : 'Eval run'}</button>)}</div>
+          {tab === 'trace' && <div className="seg small" role="group" aria-label="Trial">{[1, 2, 3].filter(n => run.results.some(r => r.scenario_id === scenario && r.trial === n)).map(n => <button key={n} type="button" aria-pressed={result.trial === n} onClick={() => pick(() => setTrial(n))}>Trial {n}<i className={run.results.find(r => r.scenario_id === scenario && r.trial === n)?.pass ? 'dot pass' : 'dot fail'} /></button>)}</div>}
+          <span className={`badge ${done ? (result.pass ? 'pass' : 'fail') : ''}`}>{done ? (result.pass ? 'Trial passed' : 'Trial failed') : 'Replaying'}</span>
+        </div>
+        {tab === 'trace' ? <>
+          <h2 className="case-title">{result.title}</h2>
+          <div className="tiles">
+            <Tile tone="blue" label="Steps" value={`${shownN} / ${total}`} />
+            <Tile tone="grey" label="Tool calls" value={tools} />
+            <Tile tone="orange" label="Guardrail actions" value={guard} />
+            <Tile tone="green" label="Replies checked" value={run.guardrails ? checked : 'off'} />
+          </div>
+          <ol className="steps">{shown.map((e, i) => <StepCard key={i} e={e} n={i + 1} last={i === shown.length - 1} />)}</ol>
+          {done && <Verdict r={result} guardrails={run.guardrails} />}
+        </> : <EvalTab v1={v1} v2={v2} version={version} note={pair.note} selected={scenario} onPick={id => pick(() => setScenario(id))} />}
+      </section>
+      <section className="panel chat" aria-label="Customer conversation">
+        <div className="chat-head"><div><strong>Lumen Assurance</strong><span>Claims assistant · what the customer sees</span></div><span>{who}</span></div>
+        <div className="chat-body" aria-live="polite">{chat.map((e, i) => <div key={i} className={`bubble-row ${e.role}`}>{e.role === 'template' && <span className="fixed">Fixed wording</span>}<p className="bubble">{e.text}</p></div>)}</div>
+        <div className="chat-foot">
+          <p>Replay of a saved trial. Customer messages come from the simulated customer. Step {shownN} of {total}.</p>
+          <div className="actions">
+            <button type="button" className="btn primary" disabled={done} onClick={() => setStep(shownN + 1)}>Next step</button>
+            <button type="button" className="btn" disabled={done} onClick={() => setStep(total)}>Show all</button>
+            <button type="button" className="btn" disabled={shownN === 1} onClick={() => setStep(1)}>Restart</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <p className="meta">Agent {run.model} · supervisor and simulator {run.models.supervisor ?? '—'} · judge {run.models.judge ?? '—'} · {run.summary.trials} trials · run {run.run_id}, {run.today}</p>
+  </Shell>;
+}
+
+function Shell({children, pairs, version, setVersion}: {children: React.ReactNode; pairs?: {id: string; label: string; on: boolean; pick: () => void}[]; version?: 'v1' | 'v2'; setVersion?: (v: 'v1' | 'v2') => void}) {
+  return <div className="page">
+    <header className="top">
+      <span className="brand"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="9" width="4" height="8" rx="1" fill="currentColor" /><rect x="7" y="5" width="4" height="12" rx="1" fill="currentColor" /><rect x="13" y="1" width="4" height="16" rx="1" fill="var(--accent)" /></svg>claims-agent <span>/ playground</span></span>
+      {pairs && setVersion && <div className="top-controls">
+        <span className="pill blue">Replay · saved run, no API calls</span>
+        {pairs.length > 1 && <div className="seg" role="group" aria-label="Agent model">{pairs.map(p => <button key={p.id} type="button" aria-pressed={p.on} onClick={p.pick}>{p.label}</button>)}</div>}
+        <div className="seg" role="group" aria-label="Agent version">{(['v1', 'v2'] as const).map(v => <button key={v} type="button" aria-pressed={version === v} onClick={() => setVersion(v)}>{v === 'v1' ? 'v1 · prompt only' : 'v2 · all layers'}</button>)}</div>
+      </div>}
+    </header>
+    {children}
   </div>;
 }
-function Metric({title, value, notation, description, progress, featured, icon}: {title: string; value: string; notation?: string; description: string; progress: number | null; featured?: boolean; icon?: React.ReactNode}) {return <div className={`metric ${featured ? 'featured' : ''}`}><div className="metric-label">{title}{notation ? <span>{notation}</span> : icon}</div><div className="metric-value">{value}{featured && <span className="headline-tag">RELIABILITY</span>}</div><p>{description}</p><div className="metric-track"><span style={{width: `${(progress ?? 0) * 100}%`}} /></div></div>;}
-function EvaluationCheck({title, pass, text}: {title: string; pass: boolean; text: string}) {return <div className={`evaluation-check ${pass ? 'good' : 'bad'}`}><span>{pass ? <Check size={17} /> : <X size={17} />}</span><div><h3>{title}</h3><p>{text}</p></div></div>;}
-function Trace({event}: {event: TraceEvent}) {
-  if (event.role === 'tool') return <details className={`tool-event ${event.rejected ? 'rejected' : ''}`}><summary><span className="trace-node"><Code2 size={13} /></span><span>{human(event.name)}</span><span className="tool-status">{event.rejected ? 'Rejected' : 'Completed'}</span><ChevronDown size={13} /></summary><div className="tool-content"><h4>INPUT</h4><pre>{JSON.stringify(event.input, null, 2)}</pre><h4>OUTPUT</h4><pre>{JSON.stringify(event.output, null, 2)}</pre><time>{event.timestamp}</time></div></details>;
-  if (event.role === 'supervisor') return event.result === 'blocked' ? <div className="supervisor-block"><ShieldCheck size={15} /><div><strong>Supervisor blocked: {human(event.check)}</strong><del>{event.original}</del><span>{event.action === 'rewrite' ? 'Returned for one rewrite' : 'Escalated to a human'}</span></div></div> : <details className="supervisor-pass"><summary><ShieldCheck size={12} />Reply checked<Check size={11} /></summary><span>{human(event.check)} · Safe to send</span></details>;
-  if (event.role === 'template') return <div className="template-event"><div><LockKeyhole size={12} /><span>Fixed wording</span></div><p>{event.text}</p></div>;
-  if (event.role === 'agent' && !event.visible) return <details className="internal-draft"><summary>Internal draft · not sent to customer<ChevronDown size={12} /></summary><p>{event.text}</p></details>;
-  return <div className={`message ${event.role}`}><div className="message-label">{event.role === 'customer' ? 'CUSTOMER' : <><span className="agent-mark">L</span>LUMEN ASSISTANT</>}<time>{new Date(event.timestamp).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}</time></div><p>{event.text}</p></div>;
+
+function Tile({tone, label, value}: {tone: string; label: string; value: React.ReactNode}) {return <div className={`tile ${tone}`}><span>{label}</span><strong>{value}</strong></div>;}
+
+function StepCard({e, n, last}: {e: Step; n: number; last: boolean}) {
+  const tag = e.role === 'customer' ? ['Simulated customer', 'grey'] : e.role === 'agent' ? ['Agent reply', 'blue'] : e.role === 'template' ? [e.name === 'safe_fallback' ? 'Safe fallback' : 'Fixed wording', 'green'] : e.role === 'supervisor' ? ['Supervisor block', 'orange'] : e.rejected ? ['Rejected by guardrail', 'pink'] : ['Tool call', 'purple'];
+  return <li className={`step ${e.role === 'supervisor' ? 'blocked' : ''} ${last ? 'last' : ''}`}>
+    <div className="step-head"><span>Step {n}</span><span className={`pill ${tag[1]}`}>{tag[0]}</span></div>
+    {e.role === 'tool' ? <details className="tool"><summary><code><b>{e.name}</b> {toolLine(e)}</code></summary><pre>{JSON.stringify({input: e.input, output: e.output}, null, 2)}</pre></details>
+      : e.role === 'supervisor' ? <div className="sup"><del>{e.original}</del><span>Blocked as {human(e.check)}. {e.action === 'rewrite' ? 'Sent back for one rewrite; the customer never saw this draft.' : 'Second block in a row, so the customer got the safe fallback and a human ticket.'}</span></div>
+      : <p>{e.text}</p>}
+  </li>;
 }
+
+function Verdict({r, guardrails}: {r: TrialResult; guardrails: boolean}) {
+  const actual = r.actual_outcome ?? 'none';
+  return <div className="verdict">
+    <h3>Eval verdict for this trial</h3>
+    <dl>
+      <dt>Expected outcome</dt><dd><span className={`pill out ${r.expected.outcome ?? 'none'}`}>{OUTCOME[r.expected.outcome ?? 'none']}{r.expected.handoff ? ' + handoff' : ''}</span></dd>
+      <dt>Actual outcome</dt><dd><span className={`pill out ${actual}`}>{OUTCOME[actual]}{r.handoff ? ' + handoff' : ''}</span></dd>
+      <dt>Final state (code)</dt><dd className={r.state_check.pass ? 'good' : 'bad'}>{r.state_check.pass ? 'Pass' : 'Fail'}</dd>
+      <dt>Policy (judge)</dt><dd className={r.policy_check.pass ? 'good' : 'bad'}>{r.policy_check.pass ? 'Pass' : 'Fail'}</dd>
+    </dl>
+    {!r.pass && <div className="note bad"><strong>Why it failed</strong><p>{r.error ?? [...r.state_check.reasons, ...(r.policy_check.pass ? [] : [r.policy_check.reason])].join(' ')}</p>{r.policy_check.violated_rules.length > 0 && <small>Rules broken: {r.policy_check.violated_rules.join(', ')}</small>}</div>}
+    {r.pass && <div className="note"><strong>Judge's note</strong><p>{r.policy_check.reason}</p></div>}
+    {!guardrails && <p className="hint">Guardrails were off for this run: no submission re-check, supervisor or fixed wording.</p>}
+  </div>;
+}
+
+function EvalTab({v1, v2, version, note, selected, onPick}: {v1: RunResult; v2: RunResult; version: 'v1' | 'v2'; note: string; selected: number; onPick: (id: number) => void}) {
+  const ids = [...new Set(v2.results.map(r => r.scenario_id))].sort((a, b) => a - b);
+  const passes = (run: RunResult, id: number) => run.results.filter(r => r.scenario_id === id && r.pass).length;
+  const actions = (id: number) => v2.results.filter(r => r.scenario_id === id).flatMap(r => r.transcript).filter(e => (e.role === 'supervisor' && e.result === 'blocked') || (e.role === 'tool' && e.rejected)).length;
+  const fixed = ids.filter(id => passes(v1, id) < 3 && passes(v2, id) === 3).length, regressed = ids.filter(id => passes(v1, id) === 3 && passes(v2, id) < 3).length;
+  const [a, b] = [v1.summary.pass_3, v2.summary.pass_3];
+  const verb = a === null || b === null ? 'went' : b > a ? 'rose' : b < a ? 'fell' : 'held';
+  const run = version === 'v1' ? v1 : v2;
+  return <div>
+    <h2 className="headline">pass³ {verb} from {pct(a)} to {pct(b)}. <span>{fixed} fixed{regressed ? `, ${regressed} regressed` : ''}.</span></h2>
+    {note && <p className="hint">{note}</p>}
+    <div className="tiles wide">
+      <Tile tone="blue" label="pass³" value={<>{pct(run.summary.pass_3)} <small>{version === 'v2' ? `v1 was ${pct(a)}` : 'all 3 trials'}</small></>} />
+      <Tile tone="green" label="pass¹" value={<>{pct(run.summary.pass_1)} <small>{version === 'v2' ? `v1 was ${pct(v1.summary.pass_1)}` : 'per trial'}</small></>} />
+      <Tile tone="orange" label="Supervisor blocks" value={<>{run.summary.supervisor_blocks} <small>{run.guardrails ? 'rewritten' : 'off in v1'}</small></>} />
+      <Tile tone="purple" label="Tool rejections" value={<>{run.summary.tool_rejections} <small>refused</small></>} />
+    </div>
+    <div className="table-wrap"><table>
+      <thead><tr><th scope="col">Scenario</th><th scope="col">v1</th><th scope="col">v2</th><th scope="col">Change</th><th scope="col">v2 guardrail actions</th></tr></thead>
+      <tbody>{ids.map(id => {
+        const k1 = passes(v1, id), k2 = passes(v2, id), title = v2.results.find(r => r.scenario_id === id)!.title;
+        const change = k2 > k1 ? (k2 === 3 ? 'Fixed' : 'Better') : k2 < k1 ? 'Worse' : '';
+        return <tr key={id} className={id === selected ? 'on' : ''}>
+          <th scope="row"><button type="button" onClick={() => onPick(id)} aria-pressed={id === selected}>{title}</button></th>
+          <td className={`n k${k1}`}>{k1} of 3</td><td className={`n k${k2}`}>{k2} of 3</td>
+          <td>{change && <span className={`pill ${change === 'Worse' ? 'pink' : 'green'}`}>{change}</span>}</td><td className="n">{actions(id) || ''}</td>
+        </tr>;
+      })}</tbody>
+    </table></div>
+    <p className="hint">Select a scenario to replay it on the right. Guardrail actions count supervisor blocks and refused tool calls across v2's three trials.</p>
+  </div>;
+}
+
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);

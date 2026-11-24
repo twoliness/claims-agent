@@ -9,3 +9,4 @@ packages/viewer/public/runs/
 .wrangler/
 .pnpm-store/
 .playwright-mcp/
+.claude/
