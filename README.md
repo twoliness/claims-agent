@@ -22,7 +22,7 @@ Each customer message passes through five layers. Only the first one is a langua
 
 Everything insurer-specific (plans, limits, documents, windows and wording) lives in `config/lumen.json`. A new insurer is a new file, not new code.
 
-Every event goes into a trace: customer message, agent reply, tool call, supervisor decision and template line. The viewer (`packages/viewer`) is a playground that replays any saved trial step by step. The customer's chat is on the right. On the left, an inspector shows the tool calls, guardrail actions, supervisor blocks and the eval verdict, and an Eval tab compares v1 and v2 scenario by scenario. It reads only the committed run files and makes no API calls.
+Every event goes into a trace: customer message, agent reply, tool call, supervisor decision and template line. The viewer (`packages/viewer`) is a playground that replays any saved trial step by step. The conversation sits beside a compact activity panel with tool calls, supervisor blocks and the eval verdict. An Evaluation tab compares v1 and v2 scenario by scenario. The workspace fits the viewport, with scrolling inside the cards; on mobile, a panel switch shows the conversation or activity. It reads only the committed run files and makes no API calls.
 
 ## How it's evaluated
 
@@ -82,7 +82,6 @@ Blocks on the Haiku agent went from 9 to 4, and every real promise in my test se
 - **The supervisor still over-blocks now and then.** It caught no real payment promise in any run, because no agent made one. Its false positives remain the main cost of having it. In one Haiku trial, three blocks on "your receipt for SGD 120 is already covered" (meaning the document requirement is met) ended in a fallback handoff. That trial passed only because a handoff is allowed in that scenario.
 - **The changed-amount guardrail is a heuristic.** It reads amounts the customer typed with a currency. It errs towards sending a claim to review, which is the safe direction, but it won't catch "it was fifty, sorry, fifty-five".
 - **The simulator still drifts sometimes.** 3 trials is a small sample, and pass^3 moves by one scenario with simulator noise alone.
-- **The screenshot above predates the playground viewer.**
 
 ## Next steps
 
