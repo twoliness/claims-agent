@@ -8,7 +8,7 @@ Most of the pain in an insurance claim happens at intake. Claims get filed witho
 
 ![Claims inbox and trace viewer](docs/viewer-desktop.png)
 
-Live viewer: _not deployed yet_
+Live viewer: https://claims-agent.pages.dev (static, reads the committed runs, no API calls)
 
 ## How it works
 
