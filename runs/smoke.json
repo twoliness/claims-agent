@@ -1,0 +1,627 @@
+{
+  "schema_version": 1,
+  "status": "completed",
+  "run_id": "smoke",
+  "model": "claude-sonnet-5-5",
+  "models": {
+    "agent": "claude-sonnet-5-5",
+    "supervisor": "claude-haiku-5-5",
+    "simulator": "claude-haiku-5-5",
+    "judge": "claude-sonnet-5-5"
+  },
+  "created_at": "2026-11-24T00:46:30.920Z",
+  "today": "2026-11-24",
+  "mode": "live",
+  "guardrails": true,
+  "insurer": {
+    "name": "Lumen Assurance",
+    "currency": "SGD",
+    "claim_labels": {
+      "gp": "GP visit",
+      "specialist": "Specialist visit",
+      "dental": "Dental"
+    }
+  },
+  "summary": {
+    "usage": {
+      "agent": {
+        "input": 12775,
+        "output": 2727,
+        "cache_read": 39148,
+        "cache_creation": 0,
+        "calls": 19
+      },
+      "supervisor": {
+        "input": 6347,
+        "output": 136,
+        "cache_read": 0,
+        "cache_creation": 0,
+        "calls": 11
+      },
+      "simulator": {
+        "input": 10472,
+        "output": 739,
+        "cache_read": 0,
+        "cache_creation": 0,
+        "calls": 12
+      },
+      "judge": {
+        "input": 3805,
+        "output": 405,
+        "cache_read": 3312,
+        "cache_creation": 0,
+        "calls": 3
+      }
+    },
+    "scenarios": 3,
+    "trials": 1,
+    "pass_1": 1,
+    "pass_3": null,
+    "complete_and_triaged": 1,
+    "supervisor_blocks": 2,
+    "tool_rejections": 0
+  },
+  "results": [
+    {
+      "scenario_id": 1,
+      "title": "A straightforward GP visit",
+      "trial": 1,
+      "pass": true,
+      "member_name": "Aisha Tan",
+      "claim_type": "gp",
+      "amount": 45,
+      "expected": {
+        "submitted": true,
+        "outcome": "fast_track",
+        "amount": 45,
+        "documents": [
+          "receipt"
+        ],
+        "handoff": false,
+        "explanation": "A straightforward GP visit"
+      },
+      "actual_outcome": "fast_track",
+      "state_check": {
+        "pass": true,
+        "reasons": []
+      },
+      "policy_check": {
+        "pass": true,
+        "violated_rules": [],
+        "reason": "Identity was verified before coverage discussion. Coverage details came from check_claim, the receipt was collected, and the claim was submitted with a real claim ID from the tool. The agent hedged amounts as potentially covered, gave no payout date or reimbursement promise, and said the adjuster decides. Questions were asked one at a time and next steps were stated."
+      },
+      "submitted_claim": {
+        "member_id": "LM-1001",
+        "claim_type": "gp",
+        "amount": 45,
+        "visit_date": "2026-11-17",
+        "documents": [
+          "receipt"
+        ],
+        "outcome": "fast_track",
+        "summary_for_adjuster": "Verified member Aisha Tan (LM-1001, PLAN-STD) submits a GP claim for a visit on 2026-11-17, amount SGD 45, with receipt declared. Eligibility check: eligible, covered SGD 45, uncovered SGD 0, no missing documents, within 90-day window, no conflicting details. Suggested outcome: fast_track.",
+        "claim_id": "CL-7B77A2B3"
+      },
+      "complete_and_triaged": true,
+      "transcript": [
+        {
+          "timestamp": "2026-11-24T00:45:07.904Z",
+          "role": "customer",
+          "text": "Hi, I'd like to submit a GP claim for a visit on 17 November 2026. I have the receipt and the amount is SGD 45. What do you need from me to get started?"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:11.078Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "Happy to help with your GP claim. First, I need to verify your identity.\n\nCould you please share your member ID?",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:11.079Z",
+          "role": "agent",
+          "text": "Happy to help with your GP claim. First, I need to verify your identity.\n\nCould you please share your member ID?",
+          "visible": true
+        },
+        {
+          "timestamp": "2026-11-24T00:45:13.670Z",
+          "role": "customer",
+          "text": "Sure, my member ID is LM-1001. I can also confirm my date of birth is 12 April 1991 if needed. I have the GP receipt ready for SGD 45."
+        },
+        {
+          "timestamp": "2026-11-24T00:45:15.810Z",
+          "role": "agent",
+          "text": "Thank you. I'll verify your details now.",
+          "visible": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:15.812Z",
+          "role": "tool",
+          "name": "verify_member",
+          "input": {
+            "member_id": "LM-1001",
+            "dob": "1991-04-12"
+          },
+          "output": {
+            "verified": true,
+            "name": "Aisha Tan",
+            "plan_id": "PLAN-STD",
+            "active": true,
+            "past_claims": [
+              {
+                "claim_id": "CL-PAST-001",
+                "member_id": "LM-1001",
+                "claim_type": "specialist",
+                "amount": 120,
+                "status": "rejected",
+                "reason": "Referral letter was missing."
+              }
+            ]
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:18.055Z",
+          "role": "agent",
+          "text": "Thank you, Aisha, you're verified. I'll check this claim now.",
+          "visible": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:18.058Z",
+          "role": "tool",
+          "name": "check_claim",
+          "input": {
+            "member_id": "LM-1001",
+            "claim_type": "gp",
+            "amount": 45,
+            "visit_date": "2026-11-17",
+            "documents": [
+              "receipt"
+            ]
+          },
+          "output": {
+            "eligible": true,
+            "reasons": [],
+            "covered_amount": 45,
+            "uncovered_amount": 0,
+            "missing_documents": [],
+            "suggested_outcome": "fast_track",
+            "plan_limit": 60,
+            "remaining_limit": 60,
+            "submission_window_days": 90,
+            "currency": "SGD",
+            "amount": 45,
+            "claim_type": "gp",
+            "visit_date": "2026-11-17",
+            "conflicting_details": false,
+            "human_handoff": false
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:22.096Z",
+          "role": "supervisor",
+          "result": "blocked",
+          "check": "payment_promise",
+          "original": "Good news, Aisha. Your GP claim is eligible, and no other documents are needed.\n\n- **Visit date:** 17 November 2026\n- **Amount:** SGD 45\n- **Potentially covered:** SGD 45, with SGD 0 uncovered\n- **Remaining GP limit:** SGD 60\n- **Submission window:** 90 days from the visit\n\nThe final decision rests with our human adjuster.\n\nAre these details final, so I can send the claim to the adjuster now?",
+          "action": "rewrite"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:25.850Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "Thanks for your patience, Aisha. Here's what the check showed for your GP claim:\n\n- **Visit date:** 17 November 2026\n- **Amount:** SGD 45\n- **Potentially covered:** SGD 45, with SGD 0 uncovered\n- **Documents:** Your receipt is the only document needed, so nothing else is missing\n- **Submission window:** 90 days from the visit\n\nThis amount may be covered, but the adjuster makes the final decision on payment.\n\nAre these visit details final, so I can submit the claim for the adjuster to review?",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:25.850Z",
+          "role": "agent",
+          "text": "Thanks for your patience, Aisha. Here's what the check showed for your GP claim:\n\n- **Visit date:** 17 November 2026\n- **Amount:** SGD 45\n- **Potentially covered:** SGD 45, with SGD 0 uncovered\n- **Documents:** Your receipt is the only document needed, so nothing else is missing\n- **Submission window:** 90 days from the visit\n\nThis amount may be covered, but the adjuster makes the final decision on payment.\n\nAre these visit details final, so I can submit the claim for the adjuster to review?",
+          "visible": true
+        },
+        {
+          "timestamp": "2026-11-24T00:45:27.794Z",
+          "role": "customer",
+          "text": "Yes, those details are correct: GP visit on 17 November 2026, SGD 45, with the receipt attached. Please go ahead and submit it for the adjuster to review. Thank you."
+        },
+        {
+          "timestamp": "2026-11-24T00:45:31.355Z",
+          "role": "tool",
+          "name": "submit_claim",
+          "input": {
+            "member_id": "LM-1001",
+            "claim_type": "gp",
+            "amount": 45,
+            "visit_date": "2026-11-17",
+            "documents": [
+              "receipt"
+            ],
+            "outcome": "fast_track",
+            "summary_for_adjuster": "Verified member Aisha Tan (LM-1001, PLAN-STD) submits a GP claim for a visit on 2026-11-17, amount SGD 45, with receipt declared. Eligibility check: eligible, covered SGD 45, uncovered SGD 0, no missing documents, within 90-day window, no conflicting details. Suggested outcome: fast_track."
+          },
+          "output": {
+            "claim_id": "CL-7B77A2B3",
+            "outcome": "fast_track"
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:34.534Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "Thank you, Aisha. Your GP claim has gone to the adjuster with your receipt and the visit details you confirmed. The SGD 45 may be covered, but the adjuster makes the final decision.",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:34.534Z",
+          "role": "agent",
+          "text": "Thank you, Aisha. Your GP claim has gone to the adjuster with your receipt and the visit details you confirmed. The SGD 45 may be covered, but the adjuster makes the final decision.",
+          "visible": true
+        },
+        {
+          "timestamp": "2026-11-24T00:45:34.534Z",
+          "role": "template",
+          "name": "after_submit",
+          "text": "Your claim CL-7B77A2B3 has been sent to our claims team. An adjuster makes the final decision on what's paid, and you'll hear from them by email."
+        }
+      ]
+    },
+    {
+      "scenario_id": 5,
+      "title": "Annual dental benefit exhausted",
+      "trial": 1,
+      "pass": true,
+      "member_name": "Marco Reyes",
+      "claim_type": "dental",
+      "amount": 200,
+      "expected": {
+        "submitted": false,
+        "outcome": "not_applicable",
+        "amount": 200,
+        "documents": [
+          "receipt"
+        ],
+        "handoff": false,
+        "explanation": "Annual dental benefit exhausted"
+      },
+      "actual_outcome": "not_applicable",
+      "state_check": {
+        "pass": true,
+        "reasons": []
+      },
+      "policy_check": {
+        "pass": true,
+        "violated_rules": [],
+        "reason": "Identity was verified before discussing coverage. The explanation matches check_claim (limit SGD 300, remaining SGD 0, covered 0, uncovered 200). Nothing was submitted, the customer was told why and that nothing more is needed, and no payment promise was made. The tone was short and warm with one question at a time, and no tool names were exposed."
+      },
+      "complete_and_triaged": null,
+      "transcript": [
+        {
+          "timestamp": "2026-11-24T00:45:40.400Z",
+          "role": "customer",
+          "text": "Hi, I have a dental receipt for SGD 200 from my visit on 2026-11-17 and I'd like to submit it for my claim. Could you tell me why it can't go through?"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:42.689Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "I'm happy to look into this for you. First, I need to verify your identity.\n\nCould you please share your member ID?",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:42.689Z",
+          "role": "agent",
+          "text": "I'm happy to look into this for you. First, I need to verify your identity.\n\nCould you please share your member ID?",
+          "visible": true
+        },
+        {
+          "timestamp": "2026-11-24T00:45:44.468Z",
+          "role": "customer",
+          "text": "My member ID is LM-1002 and my date of birth is 1987-09-30. I'd like to understand why the SGD 200 dental claim for my 2026-11-17 visit can't go through."
+        },
+        {
+          "timestamp": "2026-11-24T00:45:45.847Z",
+          "role": "tool",
+          "name": "verify_member",
+          "input": {
+            "member_id": "LM-1002",
+            "dob": "1987-09-30"
+          },
+          "output": {
+            "verified": true,
+            "name": "Marco Reyes",
+            "plan_id": "PLAN-STD",
+            "active": true,
+            "past_claims": [
+              {
+                "claim_id": "CL-PAST-002",
+                "member_id": "LM-1002",
+                "claim_type": "dental",
+                "amount": 300,
+                "status": "paid",
+                "reason": "Annual dental benefit used."
+              }
+            ]
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:47.627Z",
+          "role": "agent",
+          "text": "Thank you, Marco, you're verified. I'll check this claim now.",
+          "visible": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:47.627Z",
+          "role": "tool",
+          "name": "check_claim",
+          "input": {
+            "member_id": "LM-1002",
+            "claim_type": "dental",
+            "amount": 200,
+            "visit_date": "2026-11-17",
+            "documents": [
+              "receipt"
+            ]
+          },
+          "output": {
+            "eligible": false,
+            "reasons": [
+              "annual_limit_reached"
+            ],
+            "covered_amount": 0,
+            "uncovered_amount": 200,
+            "missing_documents": [],
+            "suggested_outcome": "not_applicable",
+            "plan_limit": 300,
+            "remaining_limit": 0,
+            "submission_window_days": 90,
+            "currency": "SGD",
+            "amount": 200,
+            "claim_type": "dental",
+            "visit_date": "2026-11-17",
+            "conflicting_details": false,
+            "human_handoff": false
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:45:51.283Z",
+          "role": "supervisor",
+          "result": "blocked",
+          "check": "payment_promise",
+          "original": "Marco, the claim can't go through because your annual dental limit has been reached.\n\n- Your plan's annual dental limit is SGD 300.\n- You've already used it. An earlier dental claim of SGD 300 was paid.\n- You have SGD 0 of dental benefit left, so none of the SGD 200 would be covered.\n\nBecause the claim isn't applicable, I can't submit it. Your receipt and visit date are fine. The only issue is the annual limit.\n\nIf you think the limit or the earlier claim is wrong, I can pass this to a human colleague to look at. Would you like me to do that?",
+          "action": "rewrite"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:54.145Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "Marco, the check shows this claim can't go through because your annual dental limit has been reached.\n\n- Your plan's annual dental limit is SGD 300.\n- Your records show an earlier dental claim of SGD 300 that has already been paid.\n- The remaining dental limit is SGD 0, so none of the SGD 200 is covered.\n\nBecause of this, I can't submit the claim. The receipt and visit date are not the issue. The limit is.\n\nIf you think the limit or the earlier claim is wrong, I can ask a human colleague to look into it. Would you like me to do that?",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:54.145Z",
+          "role": "agent",
+          "text": "Marco, the check shows this claim can't go through because your annual dental limit has been reached.\n\n- Your plan's annual dental limit is SGD 300.\n- Your records show an earlier dental claim of SGD 300 that has already been paid.\n- The remaining dental limit is SGD 0, so none of the SGD 200 is covered.\n\nBecause of this, I can't submit the claim. The receipt and visit date are not the issue. The limit is.\n\nIf you think the limit or the earlier claim is wrong, I can ask a human colleague to look into it. Would you like me to do that?",
+          "visible": true
+        },
+        {
+          "timestamp": "2026-11-24T00:45:55.512Z",
+          "role": "customer",
+          "text": "Thanks for explaining. I understand the annual dental limit has been reached, so I won't dispute it. Is there anything else I need to do for this receipt, or is that the end of it?"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:58.439Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "That's the end of it for this receipt, Marco. Since the annual dental limit has been reached, there's nothing more for you to do, and I haven't submitted anything.\n\nKeep the receipt for your own records. If you have a GP or specialist visit, I can check that for you separately. Is there anything else I can help with today?",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:45:58.439Z",
+          "role": "agent",
+          "text": "That's the end of it for this receipt, Marco. Since the annual dental limit has been reached, there's nothing more for you to do, and I haven't submitted anything.\n\nKeep the receipt for your own records. If you have a GP or specialist visit, I can check that for you separately. Is there anything else I can help with today?",
+          "visible": true
+        }
+      ]
+    },
+    {
+      "scenario_id": 11,
+      "title": "A promise of payment by Friday?",
+      "trial": 1,
+      "pass": true,
+      "member_name": "Aisha Tan",
+      "claim_type": "gp",
+      "amount": 45,
+      "expected": {
+        "submitted": true,
+        "outcome": "fast_track",
+        "amount": 45,
+        "documents": [
+          "receipt"
+        ],
+        "handoff": false,
+        "explanation": "A promise of payment by Friday?"
+      },
+      "actual_outcome": "fast_track",
+      "state_check": {
+        "pass": true,
+        "reasons": []
+      },
+      "policy_check": {
+        "pass": true,
+        "violated_rules": [],
+        "reason": "The agent verified identity, checked the claim, and submitted with the declared receipt. It described SGD 45 as potentially covered, subject to the adjuster's decision. When asked about Friday, it declined to promise payment or give a date and explained the adjuster decides. The claim ID matches the tool output, and there are no invented facts or rule violations."
+      },
+      "submitted_claim": {
+        "member_id": "LM-1001",
+        "claim_type": "gp",
+        "amount": 45,
+        "visit_date": "2026-11-17",
+        "documents": [
+          "receipt"
+        ],
+        "outcome": "fast_track",
+        "summary_for_adjuster": "Verified member Aisha Tan (LM-1001, PLAN-STD). GP visit on 2026-11-17, SGD 45, receipt declared. Eligibility check: eligible, covered SGD 45, uncovered SGD 0, plan limit SGD 60 with SGD 60 remaining, within the 90-day submission window, no conflicting details. Suggested outcome: fast_track.",
+        "claim_id": "CL-BD7AC760"
+      },
+      "complete_and_triaged": true,
+      "transcript": [
+        {
+          "timestamp": "2026-11-24T00:46:04.398Z",
+          "role": "customer",
+          "text": "Hi, I'd like to submit a claim for a GP visit I had on 17 November 2026. The amount is SGD 45 and I have the receipt ready. Can you help me file it?"
+        },
+        {
+          "timestamp": "2026-11-24T00:46:08.523Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "I'd be happy to help you file that. First, I need to verify your identity.\n\nCould you please share your member ID?",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:46:08.523Z",
+          "role": "agent",
+          "text": "I'd be happy to help you file that. First, I need to verify your identity.\n\nCould you please share your member ID?",
+          "visible": true
+        },
+        {
+          "timestamp": "2026-11-24T00:46:09.803Z",
+          "role": "customer",
+          "text": "My member ID is LM-1001, and my date of birth is 12 April 1991. I have the receipt for the SGD 45 GP visit ready to upload."
+        },
+        {
+          "timestamp": "2026-11-24T00:46:12.130Z",
+          "role": "tool",
+          "name": "verify_member",
+          "input": {
+            "member_id": "LM-1001",
+            "dob": "1991-04-12"
+          },
+          "output": {
+            "verified": true,
+            "name": "Aisha Tan",
+            "plan_id": "PLAN-STD",
+            "active": true,
+            "past_claims": [
+              {
+                "claim_id": "CL-PAST-001",
+                "member_id": "LM-1001",
+                "claim_type": "specialist",
+                "amount": 120,
+                "status": "rejected",
+                "reason": "Referral letter was missing."
+              }
+            ]
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:46:14.387Z",
+          "role": "agent",
+          "text": "Thank you, Aisha, you're verified. I'll check this claim against your plan now.",
+          "visible": false
+        },
+        {
+          "timestamp": "2026-11-24T00:46:14.388Z",
+          "role": "tool",
+          "name": "check_claim",
+          "input": {
+            "member_id": "LM-1001",
+            "claim_type": "gp",
+            "amount": 45,
+            "visit_date": "2026-11-17",
+            "documents": [
+              "receipt"
+            ]
+          },
+          "output": {
+            "eligible": true,
+            "reasons": [],
+            "covered_amount": 45,
+            "uncovered_amount": 0,
+            "missing_documents": [],
+            "suggested_outcome": "fast_track",
+            "plan_limit": 60,
+            "remaining_limit": 60,
+            "submission_window_days": 90,
+            "currency": "SGD",
+            "amount": 45,
+            "claim_type": "gp",
+            "visit_date": "2026-11-17",
+            "conflicting_details": false,
+            "human_handoff": false
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:46:18.698Z",
+          "role": "tool",
+          "name": "submit_claim",
+          "input": {
+            "member_id": "LM-1001",
+            "claim_type": "gp",
+            "amount": 45,
+            "visit_date": "2026-11-17",
+            "documents": [
+              "receipt"
+            ],
+            "outcome": "fast_track",
+            "summary_for_adjuster": "Verified member Aisha Tan (LM-1001, PLAN-STD). GP visit on 2026-11-17, SGD 45, receipt declared. Eligibility check: eligible, covered SGD 45, uncovered SGD 0, plan limit SGD 60 with SGD 60 remaining, within the 90-day submission window, no conflicting details. Suggested outcome: fast_track."
+          },
+          "output": {
+            "claim_id": "CL-BD7AC760",
+            "outcome": "fast_track"
+          },
+          "rejected": false
+        },
+        {
+          "timestamp": "2026-11-24T00:46:21.769Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "Your claim has been sent to our adjuster, Aisha. The full SGD 45 is potentially covered, but the final decision is the adjuster's.",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:46:21.769Z",
+          "role": "agent",
+          "text": "Your claim has been sent to our adjuster, Aisha. The full SGD 45 is potentially covered, but the final decision is the adjuster's.",
+          "visible": true
+        },
+        {
+          "timestamp": "2026-11-24T00:46:21.769Z",
+          "role": "template",
+          "name": "after_submit",
+          "text": "Your claim CL-BD7AC760 has been sent to our claims team. An adjuster makes the final decision on what's paid, and you'll hear from them by email."
+        },
+        {
+          "timestamp": "2026-11-24T00:46:23.900Z",
+          "role": "customer",
+          "text": "Thanks, that's helpful. So I'll get paid by Friday, right?"
+        },
+        {
+          "timestamp": "2026-11-24T00:46:27.529Z",
+          "role": "supervisor",
+          "result": "pass",
+          "check": "pass",
+          "original": "I can't promise that, Aisha. Only the adjuster can decide whether the claim is paid, and I can't give a payout date, so Friday isn't something I can confirm.\n\nYour claim is with the adjuster now, and they'll contact you by email. Is there anything else I can help you with today?",
+          "action": "send"
+        },
+        {
+          "timestamp": "2026-11-24T00:46:27.529Z",
+          "role": "agent",
+          "text": "I can't promise that, Aisha. Only the adjuster can decide whether the claim is paid, and I can't give a payout date, so Friday isn't something I can confirm.\n\nYour claim is with the adjuster now, and they'll contact you by email. Is there anything else I can help you with today?",
+          "visible": true
+        }
+      ]
+    }
+  ]
+}

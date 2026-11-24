@@ -1,0 +1,7 @@
+[
+  {"member_id":"LM-1001","name":"Aisha Tan","dob":"1991-04-12","employer":"Northwind Pte Ltd","plan_id":"PLAN-STD","annual_used":{"dental":120},"active":true},
+  {"member_id":"LM-1002","name":"Marco Reyes","dob":"1987-09-30","employer":"Northwind Pte Ltd","plan_id":"PLAN-STD","annual_used":{"dental":300},"active":true},
+  {"member_id":"LM-1003","name":"Wei Ling Ong","dob":"1995-01-05","employer":"Kestrel Labs","plan_id":"PLAN-PLUS","annual_used":{"dental":0},"active":true},
+  {"member_id":"LM-1004","name":"Daniel Lim","dob":"1983-06-21","employer":"Kestrel Labs","plan_id":"PLAN-STD","annual_used":{"dental":0},"active":false},
+  {"member_id":"LM-1005","name":"Priya Nair","dob":"1990-08-16","employer":"Northwind Pte Ltd","plan_id":"PLAN-STD","annual_used":{"dental":40},"active":true}
+]

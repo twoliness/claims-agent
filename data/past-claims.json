@@ -1,0 +1,5 @@
+[
+  {"claim_id":"CL-PAST-001","member_id":"LM-1001","claim_type":"specialist","amount":120,"status":"rejected","reason":"Referral letter was missing."},
+  {"claim_id":"CL-PAST-002","member_id":"LM-1002","claim_type":"dental","amount":300,"status":"paid","reason":"Annual dental benefit used."},
+  {"claim_id":"CL-PAST-003","member_id":"LM-1003","claim_type":"gp","amount":55,"status":"pending","reason":"Awaiting adjuster review."}
+]

@@ -1,0 +1,18 @@
+{
+  "insurer_id": "lumen", "timezone": "Asia/Singapore", "display_name": "Lumen Assurance", "currency": "SGD", "submission_window_days": 90,
+  "claim_types": {
+    "gp": {"label": "GP visit", "required_docs": ["receipt"]},
+    "specialist": {"label": "Specialist visit", "required_docs": ["receipt", "referral_letter"]},
+    "dental": {"label": "Dental", "required_docs": ["receipt"], "annual_limit": true}
+  },
+  "plans": [
+    {"plan_id": "PLAN-STD", "limits": {"gp": 60, "specialist": 150, "dental": 300}},
+    {"plan_id": "PLAN-PLUS", "limits": {"gp": 80, "specialist": 250, "dental": 500}}
+  ],
+  "handoff_triggers": ["hospitalisation", "emergency", "dispute", "asked_twice", "uncertainty"],
+  "templates": {
+    "after_submit": "Your claim {claim_id} has been sent to our claims team. An adjuster makes the final decision on what's paid, and you'll hear from them by email.",
+    "handoff": "I've passed this to a member of our team (ticket {ticket_id}). They'll pick it up from here.",
+    "safe_fallback": "Let me get a colleague to help with that."
+  }
+}

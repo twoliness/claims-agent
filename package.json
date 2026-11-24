@@ -1,0 +1,32 @@
+{
+  "name": "claims-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "chat": "node --import tsx packages/agent/chat.ts",
+    "eval": "node --import tsx packages/evals/run.ts",
+    "rescore": "node --import tsx packages/evals/rescore.ts",
+    "demo": "node --import tsx packages/evals/demo.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepare:runs": "node --import tsx scripts/prepare-runs.ts",
+    "dev": "pnpm prepare:runs && pnpm --filter @claims/viewer dev",
+    "build": "pnpm typecheck && pnpm prepare:runs && pnpm --filter @claims/viewer build"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.13.0",
+    "dotenv": "^17.2.3",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
