@@ -22,8 +22,10 @@ const trialsFor = (run: RunResult, id: number) => run.results.filter(r => r.scen
 function App() {
   const [runs, setRuns] = useState<Record<string, RunResult>>({}), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const [pairId, setPairId] = useState<string>('haiku'), [version, setVersion] = useState<'v1' | 'v2'>('v2');
-  const [scenario, setScenario] = useState(14), [trial, setTrial] = useState(1), [tab, setTab] = useState<'conversation' | 'evaluation'>('conversation');
+  const [scenario, setScenario] = useState(14), [trial, setTrial] = useState(1), [tab, setTab] = useState<'conversation' | 'evaluation'>(() => location.hash === '#evaluation' ? 'evaluation' : 'conversation');
   const [step, setStep] = useState<number | null>(null);
+  // #evaluation opens the Evaluation tab, so the README can link straight to the results.
+  useEffect(() => {history.replaceState(null, '', tab === 'evaluation' ? '#evaluation' : location.pathname + location.search);}, [tab]);
   const [mobilePanel, setMobilePanel] = useState<'conversation' | 'activity'>('conversation');
   useEffect(() => {
     (async () => {

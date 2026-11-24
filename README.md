@@ -6,9 +6,17 @@ A claims-intake chat agent for a group health insurer. It makes sure every claim
 
 Most of the pain in an insurance claim happens at intake. Claims get filed without the referral letter, bounce back a week later, and the customer has no idea what's covered or who decides. This agent does intake only: it verifies the member, explains coverage in plain language, collects every required document before submitting, and sorts each claim into fast-track, needs review or not applicable. **It never approves or pays anything. A human adjuster does.**
 
-![Claims inbox and trace viewer](docs/viewer-desktop.png)
+![Claims Agent Demo viewer: a recorded conversation beside the agent's tool calls and eval verdict](docs/viewer-desktop.png)
 
-Live viewer: https://claims-agent.pages.dev (static, reads the committed runs, no API calls)
+### See the test results
+
+- **[Evaluation results](https://claims-agent.pages.dev/#evaluation)**: pass rates and a prompt-only vs guardrails-on comparison for all 15 scenarios.
+- **[Recorded conversations](https://claims-agent.pages.dev/)**: replay any trial step by step, with its tool calls, supervisor blocks and verdict.
+- **Raw run files**: [v1-haiku](runs/v1-haiku.json) and [v2-haiku](runs/v2-haiku.json) (Haiku agent, prompt only and guardrails on), and [v1-baseline](runs/v1-baseline.json) and [v2-fixed](runs/v2-fixed.json) (Sonnet agent, earlier scenario set).
+
+The viewer is a static site that reads the committed run files. It makes no API calls.
+
+![Evaluation tab: pass rates and per-scenario results with and without guardrails](docs/viewer-evaluation.png)
 
 ## How it works
 
